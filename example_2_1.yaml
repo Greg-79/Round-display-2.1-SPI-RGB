@@ -1,0 +1,471 @@
+# Board: Espressif ESP32-S3-DevKitC-1-N16R16V (16 MB Flash Quad, 16 MB PSRAM Octal)
+# Definition: definitions/boards/esp32-s3-devkitc1-n16r16/manifest.yaml
+# Для использования RGB666 комманда 3Ah должна быть с параметром 0x60
+# Для RGB565 B0 и R0 должны быть на GND, комманда 3Ah с параметром 0x60
+#            B5 и R5 должны быть на GND, комманда 3Ah с параметром 0x50
+# 1-led+, 2,3-led-, 4-GND, 5-3V3, 6-P_RST/gpio43, 7-nc, 8-nc, 9-P_SDA/gpio44, 10-P_SCL/gpio01, 11-P_CS/gpio02, 12-REPCLK/gpio42
+# 13-DE/gpio41, 14-VS/gpio40, 15-HS/gpio39, 16-R0/gnd/gpio38, 17-21/R1-R2-R3-R4_R5/gpio11,12,13,14,4, 22-27/G0-G1-G2-G3-G4-G5-G6/gpio5,6,7,15,16,17
+# 28-33/B0-GND/gpio18, B1-B2-B3-B4-B5/gpio8,3,46,9,10, 34-GND, 35-TP_INT, 36-TP_SDA, 37-TP_SCL, 38-TP_RST, 39-3V3, 40-GND
+
+esphome:
+  name: 2-1
+  friendly_name: "2_1"
+  platformio_options:
+#    build_flags: "-DBOARD_HAS_PSRAM"  # Enable PSRAM support at compile time
+#    board_build.esp-idf.memory_type: qio_opi  # Flash memory type configuration
+    board_build.flash_mode: qio       # Flash mode configuration
+  on_boot:
+    priority: 250.0
+    then:
+#      - delay: 5s
+      - light.turn_on:
+          id: status_led
+          blue: 0%
+          red: 0%
+          green: 60%
+          brightness: 60%
+          effect: low pulse
+esp32:
+  variant: esp32s3
+  flash_size: 8MB #16MB
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: y   
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: y
+      CONFIG_SPIRAM_RODATA: y
+
+psram:
+  mode: octal
+  speed: 80MHz 
+
+# Enable logging
+logger:
+#  level: DEBUG 
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "ujcgmEaaZ5Wzdd6DcitbBekVn4LlgjPui32bcwsd1B8="
+  on_client_connected:
+    - if:
+        condition:
+          lambda: 'return (0 == client_info.find("Home Assistant "));'
+        then:
+          - light.turn_on:
+              id: status_led
+              blue: 60%
+              red: 0%
+              green: 0%
+              brightness: 60%
+              effect: fast pulse
+  on_client_disconnected:
+    - if:
+        condition:
+          lambda: 'return (0 == client_info.find("Home Assistant "));'
+        then:
+          - light.turn_on:
+              id: status_led
+              blue: 0%
+              red: 60%
+              green: 0%
+              brightness: 60%
+              effect: fast pulse
+ota:
+  - platform: esphome
+    encryption:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Screen-21-Display"
+    password: "uTa2xfhEuMez"
+
+captive_portal:
+light:
+  - platform: esp32_rmt_led_strip
+    chipset: WS2812
+    channel_colors: GRB
+    pin: 
+      number: GPIO48
+    num_leds: 1
+    id: status_led
+    name: "Status_led"
+    effects:
+      - random:
+      - flicker:
+      - addressable_rainbow:
+      - strobe:
+      - flicker:
+          name: Broad Flicker
+          alpha: 95%
+          intensity: 10%
+      - addressable_rainbow:
+          name: Fast Rainbow
+          speed: 50
+      - pulse:
+          name: "Fast Pulse"
+          transition_length: 0.5s
+          update_interval: 0.5s
+          min_brightness: 0%
+          max_brightness: 50%
+      - pulse:
+          name: "Low Pulse"
+          transition_length: 1s
+          update_interval: 1s
+          min_brightness: 0%
+          max_brightness: 50%
+spi:
+  clk_pin: 1
+  mosi_pin: 44
+  interface: hardware
+
+display:
+  - platform: mipi_rgb
+    model: UEDX48480021-MD80ET
+    id: my_display
+    spi_mode: MODE3
+    color_order: RGB
+    invert_colors: false
+    update_interval: 10ms
+    auto_clear_enabled: false
+    dimensions:
+      width: 480
+      height: 480
+      offset_height: 0
+    #pixel_mode: 16bit  
+    reset_pin: 43
+    cs_pin: 02
+    de_pin: 41
+    hsync_pin: 39
+    vsync_pin: 40
+    pclk_pin: 42
+    data_pins:
+      red: [8, 3, 46, 9, 10] #[18, 8, 3, 46, 9]
+      green: [5, 6, 7, 15, 16, 17]
+      blue: [11, 12, 13, 14, 4] #[11, 12, 13, 14, 38]
+    data_rate: 8MHz
+    pclk_frequency: 12MHz
+    pclk_inverted: false
+    
+    hsync_front_porch: 20
+    hsync_pulse_width: 10
+    hsync_back_porch: 10
+    vsync_front_porch: 8
+    vsync_pulse_width: 10
+    vsync_back_porch: 10
+    show_test_card: false
+   
+lvgl:
+  displays:
+    - my_display
+  bg_color: 0x000000
+  scrollable: false
+  top_layer:
+    widgets:
+      - led:
+          id: led_id
+          align: CENTER
+          width: 480
+          height: 480
+          color: 0xFF0000
+          brightness: 100%
+          bg_opa: 0%
+          line_color: 0xff0000
+  page_wrap: true
+  pages:
+    - id: page_text
+      widgets:
+        - label:
+            align: center
+            y: -160
+            text: "Привет!"
+            text_color: 0xffffff
+            text_font: font_52
+        - label:
+            align: center
+            y: -90
+            text: "Привет!"
+            text_color: 0xff0000
+            text_font: font_52
+        - label:
+            align: center
+            y: 0
+            text: "Привет!"
+            text_color: 0xFFFF00
+            text_font: font_52            
+        - label:
+            align: center
+            y: 90
+            text: "Привет!"
+            text_color: 0x00FF00
+            text_font: font_52
+        - label:
+            align: center
+            y: 160
+            text: "Привет!"
+            text_color: 0x0000ff
+            text_font: font_52
+################
+    - id: screen_server
+      #width: 100%
+      bg_color: 0x000000
+      widgets:
+        - spinner:
+            align: center
+            width: 455
+            height: 455
+            arc_width: 50
+            arc_opa: TRANSP
+            spin_time: 4s
+            arc_length: 60deg          
+            id: spinner_id3
+            indicator:
+              arc_color: 0x87CEEB
+              #arc_opa: 5%
+              arc_rounded: false
+        - spinner:
+            align: center
+            width: 415
+            height: 415
+            arc_width: 30
+            arc_opa: TRANSP
+            spin_time: 6s
+            arc_length: 80deg
+            indicator:
+              arc_color: 0x87CEEB
+              #arc_opa: 10%
+              arc_rounded: false
+        - label:
+            text_font: roboto60
+            id: display_time
+            align: center
+            text_color: 0x0000FF #87CEEB           
+        - label: #день недели
+            text_font: font_30
+            id: day
+            align: CENTER
+            text_color: 0x0000FF #87CEEB
+            y: -58           
+        - label:
+            text_font: font_30
+            id: date
+            align: CENTER
+            text_color: 0x0000FF #87CEEB
+            y: 58
+# рабочая часть        
+        - arc: # минутная дуга
+            align: center
+            height: 365
+            width: 365
+            arc_width: 3
+            id: arc_m
+            rotation: 270
+            #value: 75
+            min_value: 0
+            max_value: 60
+            start_angle: 0
+            end_angle: 360
+            adjustable: true
+            arc_opa: 50%
+            arc_color: 0x363535
+            arc_rounded: true
+            knob:
+              bg_color: 0xffffff
+              height: 2
+              width: 2
+              #pad_all: 3
+            indicator:
+              arc_color: 0x00bbbb
+              arc_width: 5
+              #arc_opa: 15%
+              #arc_opa: 50%              
+        - arc: # часовая дуга
+            align: center
+            height: 315
+            width: 315
+            arc_width: 4
+            id: arc_hour
+            rotation: 270
+            #value: 75
+            min_value: 0
+            max_value: 12
+            start_angle: 0
+            end_angle: 360
+            adjustable: true
+            arc_opa: 50%
+            arc_color: 0x363535
+            arc_rounded: true
+            knob:
+              bg_color: 0xffffff
+              height: 3
+              width: 3
+              #pad_all: 4
+            indicator:
+              arc_color: 0x00bbbb
+              arc_width: 6
+              #arc_opa: 80%            
+    - id: page_arc
+      widgets:
+        - arc:
+            id: page2_arc
+            align: center
+            width: 400
+            height: 400
+            min_value: 0
+            max_value: 100
+            value: 50
+            bg_opa: 0%
+            arc_width: 20
+            arc_color: 0x550000
+            adjustable: true
+            indicator:
+              arc_color: 0xff50000
+              arc_width: 20
+            knob:
+              bg_color: 0xbbbbbb
+              pad_all: 8
+        - label:
+            id: page2_value
+            align: center
+            text: "-3"
+            #text: "50"
+            text_color: 0x555555
+            text_font: roboto60
+
+number:
+  - platform: template
+    optimistic: true
+    name: arc_number
+    id: arc_number
+    min_value: 0
+    max_value: 100
+    step: 1
+    initial_value: 50
+    on_value:
+      then:
+        - lvgl.arc.update:
+            id: page2_arc
+            value: !lambda return x;
+        - lvgl.label.update:
+            id: page2_value
+            text: 
+              format: "%.0f"
+              args: [ 'x' ] 
+
+button:
+  - platform: template
+    name: next page
+    id: next
+    on_press:
+      then:
+        - lvgl.page.next: 
+font:
+  - file: "display/gfonts/Roboto-Regular.ttf"
+    id: font_52
+    size: 50
+    bpp: 2
+    glyphs: |-
+      !"%()+=,-_.:³°<>μ0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЬЫЪЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ абвгдеёжзийклмнопрстуфхцчшщьыъэюяabcdefghijklmnopqrstuvwxyz'/
+
+  - file: "display/gfonts/Roboto-Regular.ttf"
+    id: font_30
+    size: 30
+    bpp: 2
+    glyphs: |-
+      !"%()+=,-_.:³°<>μ0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЬЫЪЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ абвгдеёжзийклмнопрстуфхцчшщьыъэюяabcdefghijklmnopqrstuvwxyz'/
+
+  - file: "display/gfonts/Roboto-Regular.ttf"
+    id: roboto24
+    size: 24
+    bpp: 2
+    glyphs: |-
+      !"%()+=,-_.:³°<>μ0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧЩЬЫЪЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ абвгдеёжзийклмнопрстуфхцчщьыъэюяabcdefghijklmnopqrstuvwxyz'/&
+
+  - file: "display/gfonts/Roboto-Regular.ttf"
+    id: roboto20
+    size: 20
+    bpp: 2
+    glyphs: |-
+      !"%()+=,-_.:³°<>μ0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЬЫЪЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ абвгдеёжзийклмнопрстуфхцчшщьыъэюяabcdefghijklmnopqrstuvwxyz'
+    ignore_missing_glyphs: true
+
+  - file: "display/gfonts/Roboto-Regular.ttf"
+    id: roboto60
+    size: 80
+    bpp: 2
+    glyphs: |-
+      !"%()+=,-_.:³°μ0123456789АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЬЫЪЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ абвгдеёжзийклмнопрстуфхцчшщьыъэюяabcdefghijklmnopqrstuvwxyz'/&
+
+  - file: "display/gfonts/icons_v2.ttf"
+    id: icons
+    size: 28 #24
+    bpp: 2
+    glyphs: [
+      "\U0000e935", # home assistant
+      "\U0000e931", # wifi signal from 25% to 1%
+      "\U0000e932", # wifi signal from 50% to 25%
+      "\U0000e933", # wifi signal from 75% to 50%
+      "\U0000e934", # wifi signal from 100% to 75% or disable
+      "\U0000e938", # humidity
+      "\U0000e939", #temperature_icon
+    ]      
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: Europe/Moscow #"MSK-2MSD,M3.5.0/2,M10.5.0/3"
+    servers:
+     - 0.pool.ntp.org
+     - 1.pool.ntp.org
+     - 2.pool.ntp.org
+    on_time_sync:
+      - script.execute: time_update
+    on_time:
+      - minutes: '*'
+        seconds: 0
+        then:
+          - script.execute: time_update
+            
+script:
+  - id: time_update
+    then:
+      - lvgl.label.update:
+          id: display_time
+          text: !lambda |-
+            static char dateBuf[20];
+            auto now = id(sntp_time).now();
+            int dateHour = id(sntp_time).now().hour;
+            int dateMinute = id(sntp_time).now().minute;
+            sprintf(dateBuf, "%02d:%02d", dateHour, dateMinute);
+            return dateBuf;
+      - lvgl.arc.update:
+          id: arc_m
+          value: !lambda |-
+            auto now = id(sntp_time).now();
+            int dateMinute = id(sntp_time).now().minute;
+            return dateMinute;
+      - lvgl.arc.update:
+          id: arc_hour
+          value: !lambda |-
+            auto now = id(sntp_time).now();
+            //int dateHour = id(sntp_time).now().hour;
+            return std::fmod(now.hour, 12);
+            //return dateHour - 12;
+      - lvgl.label.update:
+          id: day
+          text: !lambda |-
+            auto now = id(sntp_time).now();
+            static const char * const day_names[] = {"Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"};
+            return day_names[id(sntp_time).now().day_of_week-1];
+      - lvgl.label.update:
+          id: date
+          text: !lambda |-
+            //static const char * const mon_names[] = {"Января", "Февраля", "Марта", "Апреля", "Мая", "Июня", "Июля", "Августа", "Сентября", "Октября", "Ноября", "Декабря"};
+            static const char * const mon_names[] = {"01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"};
+            static char date_buf[20];
+            auto now = id(sntp_time).now();
+            snprintf(date_buf, sizeof(date_buf), "%2d %s %2d", now.day_of_month, mon_names[now.month-1], now.year);
+            return date_buf;
